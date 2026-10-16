@@ -151,28 +151,36 @@ export class ReporteService {
    * @throws BadRequestException si el reporte ya fue moderado.
    */
   async update(userID: string, id: string, changes: UpdateReporteDto): Promise<ReporteResponseDto> {
+    // Valida que sea tuyo y que siga en "pendiente"
     await this.obtenerReportePropio(userID, id);
+
     if (changes.categorias) {
       for (const categoriaId of changes.categorias) {
-        const categoria = await this.categoriaRepository.findById(categoriaId);
-        if (!categoria) {
-          throw new NotFoundException(`La categoría no existe`);
+        if (!(await this.categoriaRepository.findById(categoriaId))) {
+          throw new NotFoundException('La categoría no existe');
         }
       }
       await this.reporteCategoriaRepository.eliminarTodas(id);
       await this.reporteCategoriaRepository.agregarVarias(id, changes.categorias);
     }
+
     if (changes.titulo) {
       await this.repository.update(id, { titulo: changes.titulo });
     }
-    const updated = (await this.repository.findById(id))!;
-    const response = ReporteResponseDto.fromEntity(updated, { incluirDueno: false });
-    if (changes.categorias) {
-      response.categorias = changes.categorias;
-    } else {
-      response.categorias = await this.reporteCategoriaRepository.findCategorias(id);
+
+    // Descripción y número/enlace viven en la evidencia
+    if (changes.descripcion !== undefined || changes.url !== undefined) {
+      const [evidencia] = await this.evidenciaRepository.findByReporteId(id);
+      if (evidencia) {
+        await this.evidenciaRepository.actualizarTexto(evidencia.id, {
+          descripcion: changes.descripcion,
+          url: changes.url,
+        });
+      }
     }
-    return response;
+
+    const actualizado = (await this.repository.findById(id))!;
+    return this.completarDto(actualizado, true, userID);
   }
 
   /**
