@@ -90,6 +90,15 @@ export class EvidenciaRepository {
     );
     return this.findById(id);
   }
+
+  async actualizarTexto(id: string, cambios: { url?: string; descripcion?: string }): Promise<void> {
+    const sets: string[] = [];
+    const valores: string[] = [];
+    if (cambios.url !== undefined) { sets.push('url = ?'); valores.push(cambios.url); }
+    if (cambios.descripcion !== undefined) { sets.push('descripcion = ?'); valores.push(cambios.descripcion); }
+    if (sets.length === 0) return;
+    await this.pool.query(`UPDATE evidencia SET ${sets.join(', ')} WHERE id = ?`, [...valores, id]);
+  }
 }
 
 function toEntity(row: any): Evidencia {
