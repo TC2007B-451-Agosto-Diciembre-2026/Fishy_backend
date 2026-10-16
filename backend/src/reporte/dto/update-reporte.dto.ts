@@ -1,7 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateReporteDto } from './create-reporte.dto';
-import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class UpdateReporteDto {
   @ApiPropertyOptional({
@@ -20,4 +18,24 @@ export class UpdateReporteDto {
   @IsNotEmpty()
   @IsString()
   titulo?: string;
+
+  @ApiPropertyOptional({
+    description: 'Descripción de lo que pasó (se guarda en la evidencia)',
+    example: 'Me llegó un SMS diciendo que mi paquete estaba retenido en aduana...',
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(2000)
+  descripcion?: string;
+
+  @ApiPropertyOptional({
+    description: 'Número o enlace sospechoso (se guarda en la evidencia)',
+    example: 'www.comprasfalsas.com',
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(500)
+  url?: string;
 }
