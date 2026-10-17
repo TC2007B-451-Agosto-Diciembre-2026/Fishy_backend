@@ -6,26 +6,34 @@ import { Categoria } from './entities/categoria.entity';
 
 const COLUMNS = 'id, nombre';
 
+// Lista blanca de columnas: para nombres de columna no existe `?`, así que solo pasan estas.
+const ALLOWED_COLUMNS = new Set(['nombre']);
+
+interface CategoriaRow extends RowDataPacket {
+    id: string;
+    nombre: string;
+}
+
 @Injectable()
 export class CategoriaRepository {
     constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
     async findAll(): Promise<Categoria[]>{
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<CategoriaRow[]>(
             `SELECT ${COLUMNS} FROM categoria ORDER BY nombre`,    
         );
         return rows.map(toEntity);
     }
 
     async findById(id: string): Promise<Categoria | undefined> {
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<CategoriaRow[]>(
             `SELECT ${COLUMNS} FROM categoria WHERE id = ?`, [id]
         );
         return rows[0] && toEntity(rows[0]);
     }
     
     async findByNombre(nombre: string): Promise<Categoria | undefined> {
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<CategoriaRow[]>(
             `SELECT ${COLUMNS} FROM categoria WHERE nombre = ?`, [nombre]
         );
         return rows[0] && toEntity(rows[0]);
@@ -41,8 +49,7 @@ export class CategoriaRepository {
     }
 
     async update(id: string, changes: Partial<Categoria>): Promise<Categoria | undefined> {
-        const allowedColumns = ['nombre'];
-        const entries = Object.entries(changes).filter(([column, value]) => allowedColumns.includes(column) && value !== undefined);
+        const entries = Object.entries(changes).filter(([column, value]) => ALLOWED_COLUMNS.has(column) && value !== undefined);
         if (entries.length === 0) return this.findById(id);
 
         const sets = entries.map(([column]) => `${column} = ?`).join(', ');
@@ -60,7 +67,7 @@ export class CategoriaRepository {
     }
 }
 
-function toEntity(row: any): Categoria {
+function toEntity(row: CategoriaRow): Categoria {
     const categoria = new Categoria();
     categoria.id = row.id;
     categoria.nombre = row.nombre;

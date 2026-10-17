@@ -15,8 +15,6 @@ export const DB_POOL = 'DB_POOL';
         const port = Number(config.get<string>('DB_PORT', '3306'));
         const database = config.getOrThrow<string>('DB_NAME');
 
-        console.log(`Conectando a mysql://${host}:${port}/${database}`);
-
         return createPool({
           host,
           port,

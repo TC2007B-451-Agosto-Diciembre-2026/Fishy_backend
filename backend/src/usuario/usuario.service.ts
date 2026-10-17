@@ -1,11 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 const bcrypt = require('bcrypt') as typeof import('bcrypt');
 import { UsuarioRepository } from './usuario.repository';
 import { RolRepository } from '../rol/rol.repository';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { UsuarioResponseDto } from './dto/usuario-response.dto';
-import { ResultSetHeader } from 'node_modules/mysql2/typings/mysql/lib/protocol/packets/ResultSetHeader';
+import { Usuario } from './entities/usuario.entity';
 
 const ROL_DEFAULT = 'usuario';
 @Injectable()
@@ -21,7 +21,7 @@ export class UsuarioService {
         }
         const rolDefault = await this.rolRepository.findByNombre(ROL_DEFAULT);
             if (!rolDefault) {
-                throw new Error('Error. revisar /seed.sql')
+                throw new InternalServerErrorException('Error de configuración del servidor');
             }
 
         const contrasenaHash = await bcrypt.hash(dto.contrasena, 10)
@@ -32,13 +32,13 @@ export class UsuarioService {
             contrasenaHash,
             tieneRol: rolDefault.id,
         });
-        console.log('Usuario creado: ' + creado.nombre + ' ' + creado.correo);
         return new UsuarioResponseDto(creado);
     }
 
     async obtener(id: string): Promise<UsuarioResponseDto> {
-        const usuario = (await this.usuarioRepository.findAll()).find((u) => u.id == id);
-        if (!usuario) throw new NotFoundException('error.');
+        // Antes: findAll().find() traía la tabla entera (con hashes) para hallar una fila.
+        const usuario = await this.usuarioRepository.findById(id);
+        if (!usuario) throw new NotFoundException('Usuario no encontrado');
         return new UsuarioResponseDto(usuario);
     }
 
@@ -50,10 +50,10 @@ export class UsuarioService {
 
     async actualizar(id: string, dto: UpdateUsuarioDto): Promise<UsuarioResponseDto> {
 
-        const cambios: Record<string, any> = {...dto};
-        if (dto.contrasena) {
-            cambios.contrasenaHash = await bcrypt.hash(dto.contrasena, 10);
-            delete cambios.contrasena;
+        const { contrasena, ...resto } = dto;
+        const cambios: Partial<Usuario> = { ...resto };
+        if (contrasena) {
+            cambios.contrasenaHash = await bcrypt.hash(contrasena, 10);
         }
         
         if (dto.contrasena && dto.contrasena.length < 10) {
@@ -78,8 +78,8 @@ export class UsuarioService {
         try {
             const eliminado = await this.usuarioRepository.delete(id);
             if (!eliminado) throw new NotFoundException('No existe un usuario con ese id');
-        } catch (e: any) {
-            if (e.code === 'ER_ROW_IS_REFERENCED_2') {
+        } catch (e: unknown) {
+            if (e instanceof Error && 'code' in e && e.code === 'ER_ROW_IS_REFERENCED_2') {
                 throw new ConflictException('No se puede eliminar el usuario porque tiene registros asociados.');
             }
             throw e;

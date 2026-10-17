@@ -16,3 +16,5 @@ uploads/
 *.tsbuildinfo
 
 *.pyc
+# Escaner de SonarQube
+.scannerwork/

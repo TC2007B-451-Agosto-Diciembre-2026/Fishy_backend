@@ -52,7 +52,6 @@ export class EvidenciaController {
   @ApiOperation({ summary: 'Agregar una evidencia a un reporte propio' })
   @ApiResponse({ status: 201, type: EvidenciaResponseDto })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
-  @ApiResponse({ status: 403, description: 'El reporte no es tuyo' })
   @ApiResponse({ status: 404, description: 'No existe el reporte' })
   crear(@CurrentUser() user: JwtPayload, @Body() dto: CreateEvidenciaDto): Promise<EvidenciaResponseDto> {
     return this.service.crear(user.sub, dto);
@@ -81,15 +80,14 @@ export class EvidenciaController {
   @ApiOperation({ summary: 'Ver una evidencia' })
   @ApiResponse({ status: 200, type: EvidenciaResponseDto })
   @ApiResponse({ status: 404, description: 'No existe una evidencia con ese id' })
-  obtener(@Param('id') id: string): Promise<EvidenciaResponseDto> {
-    return this.service.obtener(id);
+  obtener(@CurrentUser() user: JwtPayload, @Param('id') id: string): Promise<EvidenciaResponseDto> {
+    return this.service.obtener(user.sub, user.rolNombre, id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Editar url o descripción de una evidencia propia' })
   @ApiResponse({ status: 200, type: EvidenciaResponseDto })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
-  @ApiResponse({ status: 403, description: 'La evidencia es de un reporte de otro usuario' })
   @ApiResponse({ status: 404, description: 'No existe una evidencia con ese id' })
   actualizar(
     @CurrentUser() user: JwtPayload,
@@ -103,8 +101,22 @@ export class EvidenciaController {
   FileInterceptor('photo', {
     storage: diskStorage({
       destination: 'uploads',
-      filename: (_req, file, cb) => cb(null, file.originalname),
+      // Nombre aleatorio: dos "foto.png" ya no se sobrescriben y el nombre no se puede adivinar.
+      filename: (_req, file, cb) => cb(null, randomUUID() + extname(file.originalname).toLowerCase()),
     }),
+    // Sin límite, un archivo enorme llena el disco.
+    limits: { fileSize: limitSize },
+    // Solo imágenes: el mimetype lo manda el cliente, así que también se revisa la extensión.
+    // Así un hola.html ya no se puede subir y servir como página (XSS almacenado).
+    fileFilter: (_req, file, cb) => {
+      const extension = extname(file.originalname).toLowerCase();
+      const esImagen = file.mimetype.startsWith('image/') && EXTENSIONES_PERMITIDAS.includes(extension);
+      if (esImagen) {
+        cb(null, true);
+      } else {
+        cb(new BadRequestException('Solo se permiten imágenes png, jpg, jpeg o webp'), false);
+      }
+    },
   }),
   )
   
@@ -138,7 +150,6 @@ export class EvidenciaController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Borrar una evidencia propia (y su foto)' })
   @ApiResponse({ status: 204, description: 'Borrada; sin cuerpo' })
-  @ApiResponse({ status: 403, description: 'La evidencia es de un reporte de otro usuario' })
   @ApiResponse({ status: 404, description: 'No existe una evidencia con ese id' })
   eliminar(@CurrentUser() user: JwtPayload, @Param('id') id: string): Promise<void> {
     return this.service.eliminar(user.sub, id);

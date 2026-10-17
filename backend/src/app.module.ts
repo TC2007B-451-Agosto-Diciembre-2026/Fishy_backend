@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { DatabaseModule } from './database/database.module';
 import { RolModule } from './rol/rol.module';
 import { UsuarioModule } from './usuario/usuario.module';
@@ -15,6 +16,8 @@ import { LecturaModule } from './lecturas/lectura.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // Configuración base del límite de peticiones; el login la endurece con @Throttle.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     EstadoModule,
     CategoriaModule,
     DatabaseModule,

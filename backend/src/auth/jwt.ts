@@ -5,12 +5,19 @@
  * Sin estado: el servidor no guarda tokens; los verifica recalculando la
  * firma con la misma llave. Quien no tenga la llave no puede firmar.
  */
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
-const SECRET = 'fishy-secret-2026';
-
+/**
+ * La llave sale del `.env` (`JWT_SECRET`), nunca del código.
+ * Se lee al usarla y no al importar el archivo: así ConfigModule ya cargó el `.env`.
+ * Si falta, la app falla a propósito en vez de firmar con un valor por default.
+ */
 function getSecret(): string {
-    return SECRET;
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error('Falta JWT_SECRET');
+    }
+    return secret;
 }
 
 /** Lo que viaja dentro del token. `sub` es el id del usuario. */
@@ -69,9 +76,12 @@ export function verify(token: string): JwtPayload | null {
         return null;
     }
     
-    const esperada = hmac(`${header}.${body}`);
+    const esperada = Buffer.from(hmac(`${header}.${body}`));
+    const recibida = Buffer.from(signature);
 
-    if (esperada !== signature) {
+    // timingSafeEqual tarda lo mismo sin importar en qué byte difieran.
+    // Con !== se podría adivinar la firma byte por byte midiendo tiempos.
+    if (esperada.length !== recibida.length || !timingSafeEqual(esperada, recibida)) {
         return null;
     }
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as JwtPayload;

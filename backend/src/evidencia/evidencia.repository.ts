@@ -5,21 +5,31 @@ import { DB_POOL } from '../database/database.module';
 import { Evidencia } from './entities/evidencia.entity';
 
 const COLUMNS = 'id, url, foto, descripcion, fecha_creado, perteneceAReporte';
-const UPDATABLE = ['url', 'foto', 'descripcion'];
+// Lista blanca de columnas: para nombres de columna no existe `?`, así que solo pasan estas.
+const UPDATABLE = new Set(['url', 'foto', 'descripcion']);
+
+interface EvidenciaRow extends RowDataPacket {
+  id: string;
+  url: string;
+  foto: string;
+  descripcion: string;
+  fecha_creado: Date;
+  perteneceAReporte: string;
+}
 
 @Injectable()
 export class EvidenciaRepository {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
   async findAll(): Promise<Evidencia[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EvidenciaRow[]>(
       `SELECT ${COLUMNS} FROM evidencia ORDER BY fecha_creado DESC`,
     );
     return rows.map(toEntity);
   }
  
   async findAllAprobadas(estadoAprobadoId: string): Promise<Evidencia[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EvidenciaRow[]>(
       `SELECT e.id, e.url, e.foto, e.fecha_creado, e.perteneceAReporte, e.descripcion
        FROM evidencia e
        JOIN reporte r ON r.id = e.perteneceAReporte
@@ -31,14 +41,14 @@ export class EvidenciaRepository {
   }
 
   async findById(id: string): Promise<Evidencia | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EvidenciaRow[]>(
       `SELECT ${COLUMNS} FROM evidencia WHERE id = ?`, [id]
     );
     return rows[0] && toEntity(rows[0]);
   }
 
   async findByReporteId(reporteId: string): Promise<Evidencia[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EvidenciaRow[]>(
       `SELECT ${COLUMNS} FROM evidencia WHERE perteneceAReporte = ? ORDER BY fecha_creado DESC`,
       [reporteId]
     );
@@ -46,7 +56,7 @@ export class EvidenciaRepository {
   }
 
   async buscaEnlaceAprobado(url: string, estadoAprobadoId: string): Promise<Evidencia | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EvidenciaRow[]>(
       `SELECT e.id, e.url, e.foto, e.fecha_creado, e.perteneceAReporte, e.descripcion
        FROM evidencia e
        INNER JOIN reporte r ON r.id = e.perteneceAReporte
@@ -68,7 +78,7 @@ export class EvidenciaRepository {
 
   async update(id: string, changes: Partial<Evidencia>): Promise<Evidencia | undefined> {
     const entries = Object.entries(changes).filter(
-      ([column, value]) => UPDATABLE.includes(column) && value !== undefined,
+      ([column, value]) => UPDATABLE.has(column) && value !== undefined,
     );
     if (entries.length === 0) return this.findById(id);
     const sets = entries.map(([column]) => `${column} = ?`).join(', ');
@@ -86,7 +96,8 @@ export class EvidenciaRepository {
 
   async setPhoto(id: string, filename: string): Promise<Evidencia | undefined> {
     await this.pool.query(
-      `UPDATE evidencia SET foto = '${filename}' WHERE id = '${id}'`,
+      `UPDATE evidencia SET foto = ? WHERE id = ?`,
+      [filename, id],
     );
     return this.findById(id);
   }
@@ -101,7 +112,7 @@ export class EvidenciaRepository {
   }
 }
 
-function toEntity(row: any): Evidencia {
+function toEntity(row: EvidenciaRow): Evidencia {
   const evidencia = new Evidencia();
   evidencia.id = row.id;
   evidencia.url = row.url;

@@ -85,7 +85,7 @@ describe('HU04- Consultar enlace', () => {
 
     await expect(
       service.buscaEnlaceAprobado('https://example.com/scam'),
-    ).rejects.toThrow('No existe el estado "aprobado"');
+    ).rejects.toThrow('Error de configuración del servidor');
 
     expect(evidenciaRepository.buscaEnlaceAprobado).not.toHaveBeenCalled();
   });

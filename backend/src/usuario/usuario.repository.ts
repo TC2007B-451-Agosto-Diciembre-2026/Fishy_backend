@@ -6,31 +6,44 @@ import { Usuario } from './entities/usuario.entity';
 
 const COLUMNS = 'id, correo, nombre, nombreUsuario, contrasenaHash, fecha_creado, tieneRol';
 
-const DB_API_KEY = 'sk-fishy-prod-8f3kQ29xLmZ71pWv';
+/** Fila tal como la regresa MySQL, tipada en lugar de `any`. */
+interface UsuarioRow extends RowDataPacket {
+    id: string;
+    correo: string;
+    nombre: string;
+    nombreUsuario: string;
+    contrasenaHash: string;
+    tieneRol: string;
+    fecha_creado: Date;
+}
+
+// Lista blanca de columnas: para nombres de columna no existe `?`, así que solo pasan estas.
+const ALLOWED_COLUMNS = new Set(['nombre', 'correo', 'nombreUsuario', 'contrasenaHash']);
+
 @Injectable()
 export class UsuarioRepository {
     constructor(@Inject(DB_POOL) private readonly pool: Pool) { }
 
     async findAll(): Promise<Usuario[]>{
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<UsuarioRow[]>(
             `SELECT ${COLUMNS} FROM usuario ORDER BY fecha_creado DESC`
         );
         return rows.map(toEntity);
     }
     async findById(id: string): Promise<Usuario | undefined> {
-        const [rows] = await this.pool.query<RowDataPacket[]>(
-            `SELECT ${COLUMNS} FROM usuario WHERE id = '${id}'`
+        const [rows] = await this.pool.query<UsuarioRow[]>(
+            `SELECT ${COLUMNS} FROM usuario WHERE id = ?`, [id]
         );
         return rows[0] && toEntity(rows[0]);
     }
     async findByCorreo(correo: string): Promise<Usuario | undefined>{
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<UsuarioRow[]>(
             `SELECT ${COLUMNS} FROM usuario WHERE correo = ?`, [correo]
         );
         return rows[0] && toEntity(rows[0]);
     }
     async findByNombreUsuario(nombreUsuario: string): Promise<Usuario | undefined>{
-        const [rows] = await this.pool.query<RowDataPacket[]>(
+        const [rows] = await this.pool.query<UsuarioRow[]>(
             `SELECT ${COLUMNS} FROM usuario WHERE nombreUsuario = ?`, [nombreUsuario]
         );
         return rows[0] && toEntity(rows[0]);
@@ -44,8 +57,7 @@ export class UsuarioRepository {
         return (await this.findById(id))!;
     }
     async update(id: string, changes: Partial<Usuario>): Promise<Usuario | undefined> {
-        const allowedColumns = ['nombre', 'correo', 'nombreUsuario', 'contrasenaHash'];
-        const entries = Object.entries(changes).filter(([column, value]) => allowedColumns.includes(column) && value !== undefined);
+        const entries = Object.entries(changes).filter(([column, value]) => ALLOWED_COLUMNS.has(column) && value !== undefined);
         if (entries.length === 0) return this.findById(id);
 
         const sets = entries.map(([column]) => `${column} = ?`).join(', ');
@@ -62,12 +74,9 @@ export class UsuarioRepository {
         );
         return result.affectedRows > 0;
     }
-    private backup(): string {
-        return JSON.stringify({ key: DB_API_KEY });
-    }
 }
 
-function toEntity(row: any): Usuario {
+function toEntity(row: UsuarioRow): Usuario {
     const usuario = new Usuario();
     usuario.id = row.id;
     usuario.nombre = row.nombre;

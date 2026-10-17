@@ -6,28 +6,41 @@ import { Reporte } from './entities/reporte.entity';
 
 const COLUMNS= 'id, titulo, fecha_pub, fecha_update, fecha_aprob, perteneceA, tieneEstado, tieneRiesgo';
 
-const UPDATE = ['titulo', 'tieneRiesgo', 'tieneEstado', 'fecha_aprob'];
+// Lista blanca de columnas: para nombres de columna no existe `?`, así que solo pasan estas.
+const UPDATE = new Set(['titulo', 'tieneRiesgo', 'tieneEstado', 'fecha_aprob']);
+
+interface ReporteRow extends RowDataPacket {
+  id: string;
+  titulo: string;
+  fecha_pub: Date;
+  fecha_update: Date;
+  fecha_aprob: Date | null;
+  perteneceA: string | null;
+  tieneEstado: string;
+  tieneRiesgo: string | null;
+}
 
 @Injectable()
 export class ReporteRepository {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
   async findAll():Promise<Reporte[]> {
-    const [rows]=await this.pool.query<RowDataPacket[]>(
+    const [rows]=await this.pool.query<ReporteRow[]>(
       `SELECT ${COLUMNS} FROM reporte ORDER BY fecha_pub DESC`,
     );
     return rows.map(toEntity);
   }
 
   async findAllByUsuario(perteneceA: string):Promise<Reporte[]> {
-    const [rows]=await this.pool.query<RowDataPacket[]>(
-      `SELECT ${COLUMNS} FROM reporte WHERE perteneceA = '${perteneceA}' ORDER BY fecha_pub DESC`,
+    const [rows]=await this.pool.query<ReporteRow[]>(
+      `SELECT ${COLUMNS} FROM reporte WHERE perteneceA = ? ORDER BY fecha_pub DESC`,
+      [perteneceA],
     );
     return rows.map(toEntity);
   }
 
   async findAllByEstado(estadoID: string): Promise<Reporte[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ReporteRow[]>(
       `SELECT ${COLUMNS} FROM reporte WHERE tieneEstado = ? ORDER BY fecha_pub`,
       [estadoID]
     );
@@ -35,9 +48,21 @@ export class ReporteRepository {
   }
 
   async findById(id: string): Promise<Reporte | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ReporteRow[]>(
       `SELECT ${COLUMNS} FROM reporte WHERE id = ?`,
       [id]
+    );
+    return rows[0] && toEntity(rows[0]);
+  }
+
+  /**
+   * Busca un reporte solo si es de `ownerId`. La base decide si es tuyo:
+   * uno ajeno regresa `undefined`, igual que uno que no existe.
+   */
+  async findByIdAndOwner(id: string, ownerId: string): Promise<Reporte | undefined> {
+    const [rows] = await this.pool.query<ReporteRow[]>(
+      `SELECT ${COLUMNS} FROM reporte WHERE id = ? AND perteneceA = ?`,
+      [id, ownerId]
     );
     return rows[0] && toEntity(rows[0]);
   }
@@ -52,7 +77,7 @@ export class ReporteRepository {
   }
 
   async update(id: string, changes: Partial<Reporte>): Promise<Reporte | undefined> {
-    const entries = Object.entries(changes).filter(([column, value]) => UPDATE.includes(column) && value !== undefined);
+    const entries = Object.entries(changes).filter(([column, value]) => UPDATE.has(column) && value !== undefined);
     if (entries.length === 0) return this.findById(id);
 
     const sets = entries.map(([column]) => `${column} = ?`).join(', ');
@@ -65,15 +90,15 @@ export class ReporteRepository {
     return this.findById(id);
   }
   async delete(id: string):Promise<boolean> {
-    const [result]=await this.pool.query<ResultSetHeader>
-    (
-      `DELETE FROM reporte WHERE id = '${id}'`,
+    const [result] = await this.pool.query<ResultSetHeader>(
+      `DELETE FROM reporte WHERE id = ?`,
+      [id],
     );
     return result.affectedRows>0;
   }
 }
 
-function toEntity(row: any): Reporte {
+function toEntity(row: ReporteRow): Reporte {
   const reporte=new Reporte();
   reporte.id = row.id;
   reporte.titulo = row.titulo;

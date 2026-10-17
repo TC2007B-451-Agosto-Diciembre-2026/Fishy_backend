@@ -1,11 +1,10 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { UsuarioRepository } from '../usuario/usuario.repository';
 import { RolRepository } from '../rol/rol.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { sign, verify } from './jwt';
-import { createHash } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
 import { PerfilResponseDto } from './dto/perfil-response.dto';
 
@@ -16,6 +15,8 @@ const ROL_DEFAULT = 'usuario';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usuarioRepository: UsuarioRepository,
     private readonly rolRepository: RolRepository,
@@ -32,7 +33,7 @@ export class AuthService {
     
     const rolDefault = await this.rolRepository.findByNombre(ROL_DEFAULT);
     if (!rolDefault) {
-      throw new Error(`El rol "${ROL_DEFAULT}" no existe -- revisa db/seed.sql`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
     const usuario = await this.usuarioRepository.save({
       nombre: dto.nombre,
@@ -46,18 +47,21 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string }> {
     const usuario = await this.usuarioRepository.findByCorreo(dto.correo);
-    if (!usuario) {
-      throw new UnauthorizedException('El usuario no existe');
-    }
 
-    const contrasenaCorrecta = await bcrypt.compare(dto.contrasena, usuario.contrasenaHash,);
-    if (!contrasenaCorrecta) {
-      throw new UnauthorizedException('Password incorrecto');
+    // Un solo mensaje para "no existe" y "contraseña incorrecta": con dos mensajes
+    // distintos se puede saber qué correos tienen cuenta (enumeración de usuarios).
+    // Si el usuario no existe igual se calcula un hash, para que el tiempo de
+    // respuesta tampoco lo delate.
+    const ok = usuario
+      ? await bcrypt.compare(dto.contrasena, usuario.contrasenaHash)
+      : (await bcrypt.hash(dto.contrasena, 10), false);
+    if (!usuario || !ok) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const rol = await this.rolRepository.findById(usuario.tieneRol);
     if (!rol) {
-      throw new Error(`El usuario tiene un tieneRol que no existe en la tabla rol`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
 
     const claims = {
@@ -68,13 +72,14 @@ export class AuthService {
     };
     const accessToken = sign({ ...claims, type: 'access' }, ACCESS_TTL);
     const refreshToken = sign({ ...claims, type: 'refresh' }, REFRESH_TTL);
-    console.log('Login de '+usuario.correo+': '+accessToken);
+    // Se registra el evento, nunca el token: un token en los logs es una sesión válida.
+    this.logger.log(`Login de ${usuario.correo}`);
     return { accessToken, refreshToken };
   }
 
   refresh(dto: RefreshDto): { accessToken: string } {
     const payload = verify(dto.refreshToken);
-    if (!payload || payload.type !== 'refresh') {
+    if (payload?.type !== 'refresh') {
       throw new UnauthorizedException('Refresh token invalido');
     }
     const accessToken = sign(
@@ -97,7 +102,7 @@ export class AuthService {
     }
     const rol = await this.rolRepository.findById(usuario.tieneRol);
     if (!rol) {
-      throw new Error(`El usuario tiene un tieneRol que no existe en la tabla rol`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
     return {
       id: usuario.id,
@@ -107,8 +112,4 @@ export class AuthService {
       rol: rol.nombre,
     };
   }
-}
-
-  function hash(contrasena: string): string {
-    return createHash('sha256').update(contrasena).digest('hex');
 }
