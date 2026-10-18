@@ -20,6 +20,15 @@ interface ReporteRow extends RowDataPacket {
   tieneRiesgo: string | null;
 }
 
+interface ConteoRow extends RowDataPacket {
+  total: number;
+}
+
+interface EstadisticaRow extends RowDataPacket {
+  categoria: string;
+  total: number;
+}
+
 @Injectable()
 export class ReporteRepository {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
@@ -99,23 +108,25 @@ export class ReporteRepository {
   }
 
   async contarComentarios(reporteId: string): Promise<number> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ConteoRow[]>(
       `SELECT COUNT(*) AS total FROM comentario WHERE perteneceAReporte = ?`, [reporteId]
     );
     return Number(rows[0]?.total ?? 0);
   }
 
   async contarAprobadosPorCategoria(dias: number): Promise<{ categoria: string; total: number }[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<EstadisticaRow[]>(
       `SELECT c.nombre AS categoria, COUNT(r.id) AS total
       FROM categoria c
       LEFT JOIN reporte_categoria rc ON rc.categoria_id = c.id
       LEFT JOIN reporte r
         ON r.id = rc.reporte_id
         AND r.tieneEstado = (SELECT id FROM estado WHERE nombre = 'aprobado')
-        AND COALESCE(r.fecha_aprob, r.fecha_pub) >= NOW() - INTERVAL ${dias} DAY
+        AND COALESCE(r.fecha_aprob, r.fecha_pub) >= NOW() - INTERVAL ? DAY
       GROUP BY c.id, c.nombre
-      ORDER BY total DESC, c.nombre`);
+      ORDER BY total DESC, c.nombre`,
+      [dias],
+    );
     return rows.map((row) => ({ categoria: row.categoria, total: Number(row.total) }));
   }
 }

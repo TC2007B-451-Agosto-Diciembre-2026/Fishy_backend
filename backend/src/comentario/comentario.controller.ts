@@ -23,8 +23,7 @@ export class ComentarioController {
   @ApiOperation({ summary: 'Comentar un reporte aprobado' })
   @ApiResponse({ status: 201, type: ComentarioResponseDto })
   @ApiResponse({ status: 400, description: 'Texto inválido o el reporte no está aprobado' })
-  @ApiResponse({ status: 403, description: 'El reporte no es tuyo y no está aprobado' })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   create(@CurrentUser() user: JwtPayload, @Param('reporteId') reporteId: string, @Body() dto: CreateComentarioDto): Promise<ComentarioResponseDto> {
     return this.service.create(user.sub, user.rolNombre, reporteId, dto);
   }
@@ -32,8 +31,7 @@ export class ComentarioController {
   @Get()
   @ApiOperation({ summary: 'Listar los comentarios de un reporte (más antiguos primero)' })
   @ApiResponse({ status: 200, type: [ComentarioResponseDto] })
-  @ApiResponse({ status: 403, description: 'El reporte no es tuyo y no está aprobado' })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   findAll(@CurrentUser() user: JwtPayload, @Param('reporteId') reporteId: string): Promise<ComentarioResponseDto[]> {
     return this.service.findByReporte(user.sub, user.rolNombre, reporteId);
   }

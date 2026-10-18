@@ -9,12 +9,23 @@ c.perteneceA, c.perteneceAReporte, u.nombreUsuario AS autor
 FROM comentario c
 LEFT JOIN usuario u ON u.id = c.perteneceA`;
 
+/** Fila tal como la regresa MySQL, tipada en lugar de `any`. */
+interface ComentarioRow extends RowDataPacket {
+  id: string;
+  contenido: string;
+  fecha_creado: Date;
+  fecha_update: Date;
+  perteneceA: string | null;
+  perteneceAReporte: string;
+  autor: string | null;
+}
+
 @Injectable()
 export class ComentarioRepository {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
   async findByReporte(reporteId: string): Promise<Comentario[]> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ComentarioRow[]>(
       `${SELECT} WHERE c.perteneceAReporte = ? ORDER BY c.fecha_creado ASC, c.id ASC`,
       [reporteId],
     );
@@ -22,7 +33,7 @@ export class ComentarioRepository {
   }
 
   async findById(id: string): Promise<Comentario | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(`${SELECT} WHERE c.id = ?`, [id]);
+    const [rows] = await this.pool.query<ComentarioRow[]>(`${SELECT} WHERE c.id = ?`, [id]);
     return rows[0] && toEntity(rows[0]);
   }
 
@@ -46,7 +57,7 @@ export class ComentarioRepository {
   }
 }
 
-function toEntity(row: any): Comentario {
+function toEntity(row: ComentarioRow): Comentario {
   const comentario = new Comentario();
   comentario.id = row.id;
   comentario.contenido = row.contenido;

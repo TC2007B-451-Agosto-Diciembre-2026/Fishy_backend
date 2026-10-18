@@ -76,7 +76,7 @@ export class ReporteController{
   
   @Get('estadisticas')
   estadisticas(): Promise<EstadisticaCategoriaDto[]> {
-    return this.service.estadisticas(30);
+    return this.service.estadisticas();
   } 
 
   @Get(':id')

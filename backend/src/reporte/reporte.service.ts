@@ -29,6 +29,9 @@ import {EstadisticaCategoriaDto} from './dto/estadistica-categoria.dto';
 /** Todo reporte nace en este estado y espera a que un admin lo modere. */
 const ESTADO_INICIAL = 'pendiente';
 
+/** Ventana de días que cubren las estadísticas por categoría. */
+const DIAS_ESTADISTICAS = 30;
+
 /**
  * Reglas de negocio de los reportes de fraude.
  *
@@ -390,7 +393,7 @@ export class ReporteService {
     }
   }
 
-  async estadisticas(dias = 30): Promise<EstadisticaCategoriaDto[]> {
+  async estadisticas(dias = DIAS_ESTADISTICAS): Promise<EstadisticaCategoriaDto[]> {
     return this.repository.contarAprobadosPorCategoria(dias);
   }
 }

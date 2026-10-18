@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ReporteRepository } from '../reporte/reporte.repository';
 import { Reporte } from '../reporte/entities/reporte.entity';
 import { EstadoRepository } from '../estado/estado.repository';
@@ -34,8 +34,7 @@ export class ComentarioService {
    * @param rolNombre - `rolNombre` del token.
    * @param reporteId - UUID del reporte.
    * @throws BadRequestException si el texto es solo espacios o el reporte no está aprobado.
-   * @throws NotFoundException si no existe el reporte.
-   * @throws ForbiddenException si el reporte no es tuyo y no está aprobado.
+   * @throws NotFoundException si no existe el reporte o no puedes verlo (mismo 404).
    */
   async create(userID: string, rolNombre: string, reporteId: string, dto: CreateComentarioDto): Promise<ComentarioResponseDto> {
     const contenido = this.limpiarContenido(dto.contenido);
@@ -53,8 +52,7 @@ export class ComentarioService {
 
   /**
    * Lista los comentarios de un reporte, más antiguos primero.
-   * @throws NotFoundException si no existe el reporte.
-   * @throws ForbiddenException si el reporte no es tuyo y no está aprobado.
+   * @throws NotFoundException si no existe el reporte o no puedes verlo (mismo 404).
    */
   async findByReporte(userID: string, rolNombre: string, reporteId: string): Promise<ComentarioResponseDto[]> {
     await this.obtenerReporteVisible(userID, rolNombre, reporteId);
@@ -103,12 +101,13 @@ export class ComentarioService {
   private async obtenerReporteVisible(userID: string, rolNombre: string, reporteId: string): Promise<Reporte> {
     const reporte = await this.reporteRepository.findById(reporteId);
     if (!reporte) {
-      throw new NotFoundException(`Error 404`);
+      throw new NotFoundException('Reporte no encontrado');
     }
     const esAdmin = rolNombre === 'admin';
     const esDueno = reporte.perteneceA === userID;
+    // 404 y no 403: un 403 confirmaría que el reporte existe.
     if (!esAdmin && !esDueno && !(await this.estaAprobado(reporte))) {
-      throw new ForbiddenException('No puedes ver un reporte que no es tuyo y que no está aprobado');
+      throw new NotFoundException('Reporte no encontrado');
     }
     return reporte;
   }
@@ -116,7 +115,7 @@ export class ComentarioService {
   private async estaAprobado(reporte: Reporte): Promise<boolean> {
     const estado = await this.estadoRepository.findByNombre(ESTADO_COMENTABLE);
     if (!estado) {
-      throw new Error(`No existe el estado "${ESTADO_COMENTABLE}"`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
     return reporte.tieneEstado === estado.id;
   }
@@ -124,7 +123,7 @@ export class ComentarioService {
   private async obtenerComentario(reporteId: string, id: string): Promise<Comentario> {
     const comentario = await this.repository.findById(id);
     if (!comentario || comentario.perteneceAReporte !== reporteId) {
-      throw new NotFoundException(`Error 404`);
+      throw new NotFoundException('Comentario no encontrado');
     }
     return comentario;
   }
