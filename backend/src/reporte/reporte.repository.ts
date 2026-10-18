@@ -73,6 +73,13 @@ export class ReporteRepository {
     return result.affectedRows>0;
   }
 
+  async contarComentarios(reporteId: string): Promise<number> {
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total FROM comentario WHERE perteneceAReporte = ?`, [reporteId]
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
   async contarAprobadosPorCategoria(dias: number): Promise<{ categoria: string; total: number }[]> {
     const [rows] = await this.pool.query<RowDataPacket[]>(
       `SELECT c.nombre AS categoria, COUNT(r.id) AS total
