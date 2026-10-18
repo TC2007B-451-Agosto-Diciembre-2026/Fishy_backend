@@ -5,7 +5,7 @@ import { DB_POOL } from '../database/database.module';
 import { Comentario } from './entities/comentario.entity';
 
 const SELECT = `SELECT c.id, c.contenido, c.fecha_creado, c.fecha_update, 
-c.perteneceA, c.perteneceAReporte, u.nombre AS autor
+c.perteneceA, c.perteneceAReporte, u.nombreUsuario AS autor
 FROM comentario c
 LEFT JOIN usuario u ON u.id = c.perteneceA`;
 
