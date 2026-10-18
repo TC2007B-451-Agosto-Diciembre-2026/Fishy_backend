@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { EvidenciaRepository } from '../evidencia/evidencia.repository';
 import { EvidenciaResponseDto } from 'src/evidencia/dto/evidencia-response.dto';
 import { MisReportesResponseDto } from './dto/mis-reportes-response.dto';
+import {EstadisticaCategoriaDto} from './dto/estadistica-categoria.dto';
 
 /** Todo reporte nace en este estado y espera a que un admin lo modere. */
 const ESTADO_INICIAL = 'pendiente';
@@ -391,5 +392,9 @@ export class ReporteService {
     if (!riesgo) {
       throw new NotFoundException('El riesgo no existe.');
     }
+  }
+
+  async estadisticas(dias = 30): Promise<EstadisticaCategoriaDto[]> {
+    return this.repository.contarAprobadosPorCategoria(dias);
   }
 }
