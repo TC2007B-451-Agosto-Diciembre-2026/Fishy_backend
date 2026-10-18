@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayNotEmpty, IS_ALPHA, IsArray, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsNotEmpty, IsString, IsUUID } from 'class-validator';
 
 export class CreateReporteDto {
   @ApiProperty({ description: 'Qué pasó, en una línea', example: 'SMS falso del banco pidiendo actualizar datos' })

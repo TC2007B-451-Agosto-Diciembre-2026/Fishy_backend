@@ -1,4 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { ReporteRepository } from './reporte.repository';
 import { ReporteResponseDto } from './dto/reporte-response.dto';
 import { CreateReporteDto } from './dto/create-reporte.dto';
@@ -11,7 +19,6 @@ import { CategoriaRepository } from '../categoria/categoria.repository';
 import { ReporteCategoriaRepository } from './reporte-categoria.repository';
 import { ReporteLikeRepository } from './reporte-like.repository';
 import { UsuarioRepository } from '../usuario/usuario.repository';
-import { Inject, forwardRef } from '@nestjs/common';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EvidenciaRepository } from '../evidencia/evidencia.repository';
@@ -21,6 +28,9 @@ import {EstadisticaCategoriaDto} from './dto/estadistica-categoria.dto';
 
 /** Todo reporte nace en este estado y espera a que un admin lo modere. */
 const ESTADO_INICIAL = 'pendiente';
+
+/** Ventana de días que cubren las estadísticas por categoría. */
+const DIAS_ESTADISTICAS = 30;
 
 /**
  * Reglas de negocio de los reportes de fraude.
@@ -56,24 +66,17 @@ export class ReporteService {
    * @returns El reporte guardado, sin `perteneceA`. Aquí `categorias` trae los
    *   ids que se mandaron; en las lecturas trae nombres.
    * @throws NotFoundException si alguna categoría no existe.
-   * @throws Error si en la BD falta el estado `pendiente` (corre `db/seed.sql`).
+   * @throws InternalServerErrorException si en la BD falta el estado `pendiente` (corre `db/seed.sql`).
    */
   async create(userID: string, dto: CreateReporteDto): Promise<ReporteResponseDto> {
-    try {
-      this.checkReporte(dto);
-    } catch (e) {}
+    // Antes estaba dentro de un try/catch vacío que se tragaba el error.
+    this.checkReporte(dto);
 
     const estadoInicial = await this.estadoRepository.findByNombre(ESTADO_INICIAL);
     if (!estadoInicial) {
-      throw new Error(`No existe el estado "${ESTADO_INICIAL}"`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
-    for (const categoriaId of dto.categorias) {
-      const categoria = await this.categoriaRepository.findById(categoriaId);
-
-      if (!categoria){
-        throw new NotFoundException('la categoría no existe');
-      }
-    }
+    await this.validarCategorias(dto.categorias);
 
     const reporte = await this.repository.save({
       titulo: dto.titulo,
@@ -103,7 +106,7 @@ export class ReporteService {
     } else {
       const aprobado = await this.estadoRepository.findByNombre('aprobado');
       if (!aprobado) {
-        throw new Error('No existe el estado "aprobado"');
+        throw new InternalServerErrorException('Error de configuración del servidor');
       }
       reportes = await this.repository.findAllByEstado(aprobado.id);
     }
@@ -120,7 +123,7 @@ export class ReporteService {
    * @param rolNombre - `rolNombre` del token.
    * @param id - UUID del reporte.
    * @throws NotFoundException si no hay reporte con ese id.
-   * @throws ForbiddenException si no es tuyo y no está aprobado.
+   * @throws NotFoundException si no es tuyo y no está aprobado (igual que si no existiera).
    */
   async findOne(userID: string, rolNombre: string, id: string): Promise<ReporteResponseDto> {
     const reporte = await this.obtenerReporte(id);
@@ -129,10 +132,11 @@ export class ReporteService {
     if (!esAdmin && !esDueno) {
       const aprobado = await this.estadoRepository.findByNombre('aprobado');
       if (!aprobado) {
-        throw new Error('No existe el estado "aprobado"');
+        throw new InternalServerErrorException('Error de configuración del servidor');
       }
+      // 404 y no 403: un 403 confirmaría que el reporte existe.
       if (reporte.tieneEstado !== aprobado.id) {
-        throw new ForbiddenException('No puedes ver un reporte que no es tuyo y que no está aprobado');
+        throw new NotFoundException('Reporte no encontrado');
       }
     }
     return this.completarDto(reporte, esAdmin, userID);
@@ -147,8 +151,7 @@ export class ReporteService {
    * @param changes - `titulo` y/o `categorias` (ids).
    * @returns El reporte actualizado, sin `perteneceA`. `categorias` trae los ids
    *   si se mandaron; si no, los nombres actuales.
-   * @throws NotFoundException si no existe el reporte o alguna categoría.
-   * @throws ForbiddenException si el reporte no es tuyo.
+   * @throws NotFoundException si no existe el reporte, no es tuyo o alguna categoría no existe.
    * @throws BadRequestException si el reporte ya fue moderado.
    */
   async update(userID: string, id: string, changes: UpdateReporteDto): Promise<ReporteResponseDto> {
@@ -156,11 +159,7 @@ export class ReporteService {
     await this.obtenerReportePropio(userID, id);
 
     if (changes.categorias) {
-      for (const categoriaId of changes.categorias) {
-        if (!(await this.categoriaRepository.findById(categoriaId))) {
-          throw new NotFoundException('La categoría no existe');
-        }
-      }
+      await this.validarCategorias(changes.categorias);
       await this.reporteCategoriaRepository.eliminarTodas(id);
       await this.reporteCategoriaRepository.agregarVarias(id, changes.categorias);
     }
@@ -190,8 +189,7 @@ export class ReporteService {
    * borran del disco (`uploads/`) las fotos de sus evidencias.
    * @param userID - `sub` del token; debe ser el dueño.
    * @param id - UUID del reporte.
-   * @throws NotFoundException si no hay reporte con ese id.
-   * @throws ForbiddenException si el reporte no es tuyo.
+   * @throws NotFoundException si no hay reporte con ese id o no es tuyo.
    * @throws BadRequestException si el reporte ya fue moderado.
    */
   async remove(userID: string, id: string): Promise<void> {
@@ -209,7 +207,7 @@ export class ReporteService {
   async listarPendientes(): Promise<ReporteResponseDto[]> {
     const pendiente = await this.estadoRepository.findByNombre(ESTADO_INICIAL);
     if (!pendiente) {
-      throw new Error(`No existe el estado "${ESTADO_INICIAL}"`);
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
     const reportes = await this.repository.findAllByEstado(pendiente.id);
 
@@ -340,23 +338,23 @@ export class ReporteService {
     return dto;
   }
 
-  private checkReporte(data: any): boolean {
-    if (data) {
-      if (data.categorias) {
-        if (Array.isArray(data.categorias)) {
-          if (data.categorias.length > 0) {
-            return true;
-          } else {
-            throw new Error('sin categorias');
-          }
-        } else {
-          throw new Error('categorias no es arreglo');
-        }
-      } else {
-        throw new Error('sin categorias');
-      }
-    } else {
-      throw new Error('sin datos');
+  /** Regla de negocio: un reporte necesita al menos una categoría (400, no 500). */
+  private checkReporte(data: CreateReporteDto | undefined): void {
+    if (!data) {
+      throw new BadRequestException('Faltan los datos del reporte');
+    }
+    if (!Array.isArray(data.categorias) || data.categorias.length === 0) {
+      throw new BadRequestException('El reporte necesita al menos una categoría');
+    }
+  }
+
+  /** Revisa todas las categorías en paralelo en lugar de un await por cada una. */
+  private async validarCategorias(categoriaIds: string[]): Promise<void> {
+    const categorias = await Promise.all(
+      categoriaIds.map((categoriaId) => this.categoriaRepository.findById(categoriaId)),
+    );
+    if (categorias.some((categoria) => !categoria)) {
+      throw new NotFoundException('La categoría no existe');
     }
   }
 
@@ -372,14 +370,14 @@ export class ReporteService {
   /**
    * Regla de edición: solo el dueño, y solo mientras el reporte sigue
    * `pendiente`; ya moderado queda congelado.
-   * @throws NotFoundException si no hay reporte con ese id.
-   * @throws ForbiddenException si el reporte no es de `userID`.
+   * La base decide si es tuyo (`WHERE id = ? AND perteneceA = ?`).
+   * @throws NotFoundException si no existe o no es de `userID` (mismo 404 para los dos).
    * @throws BadRequestException si ya fue moderado.
    */
   private async obtenerReportePropio(userID: string, id: string): Promise<Reporte> {
-    const reporte = await this.obtenerReporte(id);
-    if (reporte.perteneceA !== userID) {
-      throw new ForbiddenException('No puedes modificar un reporte que no es tuyo');
+    const reporte = await this.repository.findByIdAndOwner(id, userID);
+    if (!reporte) {
+      throw new NotFoundException('Reporte no encontrado');
     }
     const pendiente = await this.estadoRepository.findByNombre('pendiente');
     if (reporte.tieneEstado !== pendiente?.id) {
@@ -395,7 +393,7 @@ export class ReporteService {
     }
   }
 
-  async estadisticas(dias = 30): Promise<EstadisticaCategoriaDto[]> {
+  async estadisticas(dias = DIAS_ESTADISTICAS): Promise<EstadisticaCategoriaDto[]> {
     return this.repository.contarAprobadosPorCategoria(dias);
   }
 }

@@ -1,6 +1,6 @@
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsuarioResponseDto } from './dto/usuario-response.dto';
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
@@ -39,8 +39,7 @@ export class UsuarioController {
     @Get(':id')
     @ApiOperation({ summary: 'Ver un usuario (el tuyo; admin: cualquiera)' })
     @ApiResponse({ status: 200, type: UsuarioResponseDto })
-    @ApiResponse({ status: 403, description: 'Solo puedes ver o editar tu propio usuario' })
-    @ApiResponse({ status: 404, description: 'No existe un usuario con ese id' })
+    @ApiResponse({ status: 404, description: 'No existe el usuario (o no es tuyo: mismo 404)' })
     obtener(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
         verificarPropio(user, id);
         return this.usuarioService.obtener(id)
@@ -69,8 +68,7 @@ export class UsuarioController {
     @ApiOperation({ summary: 'Editar nombre, correo o contraseña (el tuyo; admin: cualquiera)' })
     @ApiResponse({ status: 200, type: UsuarioResponseDto })
     @ApiResponse({ status: 400, description: 'Datos inválidos' })
-    @ApiResponse({ status: 403, description: 'Solo puedes ver o editar tu propio usuario' })
-    @ApiResponse({ status: 404, description: 'No existe un usuario con ese id' })
+    @ApiResponse({ status: 404, description: 'No existe el usuario (o no es tuyo: mismo 404)' })
     actualizar(@CurrentUser() user: JwtPayload, @Param('id') id:string, @Body() dto: UpdateUsuarioDto){
         verificarPropio(user, id);
         return this.usuarioService.actualizar(id, dto);
@@ -83,14 +81,15 @@ export class UsuarioController {
     @ApiOperation({ summary: 'Borrar un usuario (solo admin)' })
     @ApiResponse({ status: 204, description: 'Borrado; sin cuerpo' })
     @ApiResponse({ status: 403, description: 'Requiere rol admin' })
-    @ApiResponse({ status: 404, description: 'No existe un usuario con ese id' })
+    @ApiResponse({ status: 404, description: 'No existe el usuario (o no es tuyo: mismo 404)' })
     eliminar(@Param('id') id:string) {
         return this.usuarioService.eliminar(id);
     }
 }
 
+/** Un usuario ajeno responde 404, igual que uno inexistente: un 403 confirmaría que existe. */
 function verificarPropio(user: JwtPayload, id: string): void {
     if (user.sub !== id && user.rolNombre !== 'admin') {
-        throw new ForbiddenException('Solo puedes ver o editar tu propio usuario');
+        throw new NotFoundException('Usuario no encontrado');
     }
 }

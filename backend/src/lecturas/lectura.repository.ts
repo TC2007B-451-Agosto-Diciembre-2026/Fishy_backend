@@ -5,7 +5,27 @@ import { DB_POOL } from '../database/database.module';
 import { Lectura, LecturaConProgreso } from './entities/lectura.entity';
 
 const COLUMNS = 'l.id, l.titulo, l.contenido, l.orden, l.modulo';
-const UPDATABLE = ['titulo', 'contenido', 'orden', 'modulo'];
+// Lista blanca de columnas: para nombres de columna no existe `?`, así que solo pasan estas.
+const UPDATABLE = new Set(['titulo', 'contenido', 'orden', 'modulo']);
+
+interface LecturaRow extends RowDataPacket {
+  id: string;
+  titulo: string;
+  contenido: string;
+  orden: number;
+  modulo: number;
+}
+
+interface LecturaConProgresoRow extends LecturaRow {
+  completada: number | null;
+  fecha_completado: Date | null;
+}
+
+interface ConteoRow extends RowDataPacket {
+  total: number;
+  completadas: number;
+  siguiente: number;
+}
 
 @Injectable()
 export class LecturaRepository {
@@ -16,7 +36,7 @@ export class LecturaRepository {
     const params: (string | number)[] = [usuarioId];
     if (modulo !== undefined) params.push(modulo);
 
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<LecturaConProgresoRow[]>(
       `SELECT ${COLUMNS}, p.completada, p.fecha_completado
        FROM lecturas l
        LEFT JOIN progreso_lecturas p ON p.lectura_id = l.id AND p.usuario_id = ?
@@ -28,17 +48,18 @@ export class LecturaRepository {
   }
 
   async findByIdConProgreso(usuarioId: string, id: string): Promise<LecturaConProgreso | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<LecturaConProgresoRow[]>(
       `SELECT ${COLUMNS}, p.completada, p.fecha_completado
        FROM lecturas l
-       LEFT JOIN progreso_lecturas p ON p.lectura_id = l.id AND p.usuario_id = '${usuarioId}'
-       WHERE l.id = '${id}'`,
+       LEFT JOIN progreso_lecturas p ON p.lectura_id = l.id AND p.usuario_id = ?
+       WHERE l.id = ?`,
+      [usuarioId, id],
     );
     return rows[0] && toConProgreso(rows[0]);
   }
 
   async findById(id: string): Promise<Lectura | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<LecturaRow[]>(
       `SELECT ${COLUMNS} FROM lecturas l WHERE l.id = ?`,
       [id],
     );
@@ -46,7 +67,7 @@ export class LecturaRepository {
   }
 
   async findByOrden(orden: number): Promise<Lectura | undefined> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<LecturaRow[]>(
       `SELECT ${COLUMNS} FROM lecturas l WHERE l.orden = ?`,
       [orden],
     );
@@ -54,7 +75,7 @@ export class LecturaRepository {
   }
 
   async siguienteOrden(): Promise<number> {
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ConteoRow[]>(
       `SELECT COALESCE(MAX(orden), 0) + 1 AS siguiente FROM lecturas`,
     );
     return Number(rows[0].siguiente);
@@ -71,7 +92,7 @@ export class LecturaRepository {
 
   async update(id: string, changes: Partial<Lectura>): Promise<Lectura | undefined> {
     const entries = Object.entries(changes).filter(
-      ([column, value]) => UPDATABLE.includes(column) && value !== undefined,
+      ([column, value]) => UPDATABLE.has(column) && value !== undefined,
     );
     if (entries.length === 0) return this.findById(id);
     const sets = entries.map(([column]) => `${column} = ?`).join(', ');
@@ -106,7 +127,7 @@ export class LecturaRepository {
     const params: (string | number)[] = [usuarioId];
     if (modulo !== undefined) params.push(modulo);
 
-    const [rows] = await this.pool.query<RowDataPacket[]>(
+    const [rows] = await this.pool.query<ConteoRow[]>(
       `SELECT COUNT(*) AS total,
               COALESCE(SUM(CASE WHEN p.completada THEN 1 ELSE 0 END), 0) AS completadas
        FROM lecturas l
@@ -118,7 +139,7 @@ export class LecturaRepository {
   }
 }
 
-function toEntity(row: any): Lectura {
+function toEntity(row: LecturaRow): Lectura {
   const lectura = new Lectura();
   lectura.id = row.id;
   lectura.titulo = row.titulo;
@@ -128,7 +149,7 @@ function toEntity(row: any): Lectura {
   return lectura;
 }
 
-function toConProgreso(row: any): LecturaConProgreso {
+function toConProgreso(row: LecturaConProgresoRow): LecturaConProgreso {
   return {
     ...toEntity(row),
     completada: Boolean(row.completada),

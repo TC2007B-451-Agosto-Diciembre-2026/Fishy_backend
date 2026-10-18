@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EvidenciaRepository } from './evidencia.repository';
@@ -36,12 +36,26 @@ async crear(userID: string, dto: CreateEvidenciaDto): Promise<EvidenciaResponseD
       return (await this.repository.findAll()).map(EvidenciaResponseDto.fromEntity);
     }
     const aprobado = await this.estadoRepository.findByNombre('aprobado');
-    if (!aprobado) throw new Error('No existe el estado "aprobado"');
+    if (!aprobado) throw new InternalServerErrorException('Error de configuración del servidor');
     return (await this.repository.findAllAprobadas(aprobado.id)).map(EvidenciaResponseDto.fromEntity);
   }
 
-  async obtener(id: string): Promise<EvidenciaResponseDto> {
+  /**
+   * Una evidencia se puede ver si eres admin, si es de un reporte tuyo o si su
+   * reporte ya está aprobado. Si no, responde 404 igual que si no existiera:
+   * un 403 confirmaría que el id existe.
+   */
+  async obtener(userID: string, rolNombre: string, id: string): Promise<EvidenciaResponseDto> {
     const evidencia = await this.getEvidencia(id);
+    if (rolNombre !== 'admin') {
+      const reporte = await this.reporteRepository.findById(evidencia.perteneceAReporte);
+      const aprobado = await this.estadoRepository.findByNombre('aprobado');
+      const esDueno = reporte?.perteneceA === userID;
+      const estaAprobado = aprobado !== undefined && reporte?.tieneEstado === aprobado.id;
+      if (!esDueno && !estaAprobado) {
+        throw new NotFoundException('Evidencia no encontrada');
+      }
+    }
     return EvidenciaResponseDto.fromEntity(evidencia);
   }
 
@@ -63,7 +77,7 @@ async crear(userID: string, dto: CreateEvidenciaDto): Promise<EvidenciaResponseD
     }
     const aprobado = await this.estadoRepository.findByNombre('aprobado');
     if (!aprobado) {
-      throw new Error('No existe el estado "aprobado"');
+      throw new InternalServerErrorException('Error de configuración del servidor');
     }
 
     const evidencia = await this.repository.buscaEnlaceAprobado(urlNormalizada, aprobado.id);
@@ -81,7 +95,8 @@ async crear(userID: string, dto: CreateEvidenciaDto): Promise<EvidenciaResponseD
   }
 
   async setPhoto(userID: string, id: string, file: Express.Multer.File): Promise<EvidenciaResponseDto> {
-    const anterior = await this.getEvidencia(id);
+    // Solo el dueño del reporte puede cambiar la foto de su evidencia.
+    const anterior = await this.getEvidenciaPropia(userID, id);
     const actualizado = (await this.repository.setPhoto(id, file.filename))!;
     await this.borrarArchivo(anterior.foto);
     return EvidenciaResponseDto.fromEntity(actualizado);
@@ -94,13 +109,14 @@ async crear(userID: string, dto: CreateEvidenciaDto): Promise<EvidenciaResponseD
   }
 
 
+  /**
+   * La base decide si el reporte es tuyo (`WHERE id = ? AND perteneceA = ?`).
+   * Uno ajeno responde 404, igual que uno inexistente.
+   */
   private async getReportePropio(userId: string, reporteId: string): Promise<Reporte> {
-    const reporte = await this.reporteRepository.findById(reporteId);
+    const reporte = await this.reporteRepository.findByIdAndOwner(reporteId, userId);
     if (!reporte) {
-      throw new NotFoundException(`Reporte ${reporteId} no encontrado`);
-    }
-    if (reporte.perteneceA !== userId) {
-      throw new ForbiddenException('No tienes acceso a este reporte');
+      throw new NotFoundException('Reporte no encontrado');
     }
     return reporte;
   }

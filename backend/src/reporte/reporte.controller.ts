@@ -39,7 +39,8 @@ export class ReporteController{
   constructor(private readonly service: ReporteService) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('foto'))
+  // Límite de tamaño: sin él, un archivo enorme se queda en memoria.
+  @UseInterceptors(FileInterceptor('foto', { limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiOperation({ summary: 'Crear un reporte (nace pendiente)' })
   @ApiResponse({ status: 201, description: 'Reporte creado', type: ReporteResponseDto })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
@@ -75,14 +76,13 @@ export class ReporteController{
   
   @Get('estadisticas')
   estadisticas(): Promise<EstadisticaCategoriaDto[]> {
-    return this.service.estadisticas(30);
+    return this.service.estadisticas();
   } 
 
   @Get(':id')
   @ApiOperation({ summary: 'Ver un reporte' })
   @ApiResponse({ status: 200, type: ReporteResponseDto })
-  @ApiResponse({ status: 403, description: 'No es tuyo y no está aprobado' })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   findOne(@Param('id') id:string, @CurrentUser() user: JwtPayload): Promise<ReporteResponseDto> {
     return this.service.findOne(user.sub, user.rolNombre, id);
   }
@@ -91,7 +91,6 @@ export class ReporteController{
   @ApiOperation({ summary: 'Editar título o categorías de un reporte propio pendiente' })
   @ApiResponse({ status: 200, type: ReporteResponseDto })
   @ApiResponse({ status: 400, description: 'Datos inválidos o el reporte ya fue moderado' })
-  @ApiResponse({ status: 403, description: 'El reporte no es tuyo' })
   @ApiResponse({ status: 404, description: 'No existe el reporte o alguna categoría' })
   update(@CurrentUser() user: JwtPayload, @Param('id') id:string, @Body() dto: UpdateReporteDto,
   ): Promise<ReporteResponseDto> {
@@ -114,7 +113,7 @@ export class ReporteController{
   @HttpCode(200)
   @ApiOperation({ summary: 'Marcar "me pasó igual"' })
   @ApiResponse({ status: 200, schema: { example: { mePasoIgualCount: 4, yaDiLike: true } } })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   darLike(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.service.darLike(user.sub, id);
   }
@@ -123,7 +122,7 @@ export class ReporteController{
   @HttpCode(200)
   @ApiOperation({ summary: 'Quitar "me pasó igual"' })
   @ApiResponse({ status: 200, schema: { example: { mePasoIgualCount: 3, yaDiLike: false } } })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   quitarLike(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.service.quitarLike(user.sub, id);
   }
@@ -133,8 +132,7 @@ export class ReporteController{
   @ApiOperation({ summary: 'Borrar un reporte propio pendiente' })
   @ApiResponse({ status: 204, description: 'Borrado; sin cuerpo' })
   @ApiResponse({ status: 400, description: 'El reporte ya fue moderado' })
-  @ApiResponse({ status: 403, description: 'El reporte no es tuyo' })
-  @ApiResponse({ status: 404, description: 'No existe un reporte con ese id' })
+  @ApiResponse({ status: 404, description: 'No existe el reporte (o no puedes verlo: mismo 404)' })
   remove(@CurrentUser() user: JwtPayload, @Param('id') id: string):Promise<void> {
     return this.service.remove(user.sub, id);
   }

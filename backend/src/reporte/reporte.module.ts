@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { ReporteController } from './reporte.controller';
 import { ReporteRepository } from './reporte.repository';
@@ -11,7 +11,6 @@ import { ReporteCategoriaRepository } from './reporte-categoria.repository';
 import { ReporteLikeRepository } from './reporte-like.repository';
 import { CategoriaModule } from 'src/categoria/categoria.module';
 import { UsuarioModule } from '../usuario/usuario.module';
-import { forwardRef } from '@nestjs/common';
 import { EvidenciaModule } from '../evidencia/evidencia.module';
 
 @Module({

@@ -235,9 +235,8 @@ describe('HU08 - Consultar detalle de un reporte', () => {
 
     await expect(
       service.findOne('U-001', 'usuario', 'REP-002'),
-    ).rejects.toThrow(
-      'No puedes ver un reporte que no es tuyo y que no está aprobado',
-    );
+    // Responde 404 (no 403) para no confirmar que el reporte existe.
+    ).rejects.toThrow('Reporte no encontrado');
   });
 });
 
