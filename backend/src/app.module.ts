@@ -9,6 +9,7 @@ import { ReporteModule } from './reporte/reporte.module';
 import { RiesgoModule } from './riesgo/riesgo.module';
 import { EvidenciaModule } from './evidencia/evidencia.module';
 import { LecturaModule } from './lecturas/lectura.module';
+import { ComentarioModule } from './comentario/comentario.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { LecturaModule } from './lecturas/lectura.module';
     RiesgoModule,
     EvidenciaModule,
     LecturaModule,
+    ComentarioModule,
   ],
 })
 export class AppModule {}
