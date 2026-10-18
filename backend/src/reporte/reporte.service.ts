@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { EvidenciaRepository } from '../evidencia/evidencia.repository';
 import { EvidenciaResponseDto } from 'src/evidencia/dto/evidencia-response.dto';
 import { MisReportesResponseDto } from './dto/mis-reportes-response.dto';
+import {EstadisticaCategoriaDto} from './dto/estadistica-categoria.dto';
 
 /** Todo reporte nace en este estado y espera a que un admin lo modere. */
 const ESTADO_INICIAL = 'pendiente';
@@ -318,12 +319,13 @@ export class ReporteService {
     const evidencias = await this.evidenciaRepository.findByReporteId(reporte.id);
     dto.evidencias = evidencias.map((e) => EvidenciaResponseDto.fromEntity(e));
  
-    dto.autor = reporte.perteneceA ? ((await this.usuarioRepository.findById(reporte.perteneceA))?.nombre ?? 'Anónimo')
+    dto.autor = reporte.perteneceA ? ((await this.usuarioRepository.findById(reporte.perteneceA))?.nombreUsuario ?? 'Anónimo')
     : 'Usuario eliminado';
  
     dto.mePasoIgualCount = await this.likeRepository.contar(reporte.id);
     dto.yaDiLike = userID ? await this.likeRepository.existe(userID, reporte.id) : false;
     dto.esMio = userID ? reporte.perteneceA === userID : false;
+    dto.comentariosCount = await this.repository.contarComentarios(reporte.id);
     
     if (reporte.tieneRiesgo) {
       const riesgo = await this.riesgoRepository.findById(reporte.tieneRiesgo);
@@ -386,5 +388,9 @@ export class ReporteService {
     if (!riesgo) {
       throw new NotFoundException('El riesgo no existe.');
     }
+  }
+
+  async estadisticas(dias = 30): Promise<EstadisticaCategoriaDto[]> {
+    return this.repository.contarAprobadosPorCategoria(dias);
   }
 }

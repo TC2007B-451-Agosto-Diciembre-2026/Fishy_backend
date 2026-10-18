@@ -89,12 +89,34 @@ export class ReporteRepository {
     );
     return this.findById(id);
   }
+
   async delete(id: string):Promise<boolean> {
     const [result] = await this.pool.query<ResultSetHeader>(
       `DELETE FROM reporte WHERE id = ?`,
       [id],
     );
     return result.affectedRows>0;
+  }
+
+  async contarComentarios(reporteId: string): Promise<number> {
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS total FROM comentario WHERE perteneceAReporte = ?`, [reporteId]
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  async contarAprobadosPorCategoria(dias: number): Promise<{ categoria: string; total: number }[]> {
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT c.nombre AS categoria, COUNT(r.id) AS total
+      FROM categoria c
+      LEFT JOIN reporte_categoria rc ON rc.categoria_id = c.id
+      LEFT JOIN reporte r
+        ON r.id = rc.reporte_id
+        AND r.tieneEstado = (SELECT id FROM estado WHERE nombre = 'aprobado')
+        AND COALESCE(r.fecha_aprob, r.fecha_pub) >= NOW() - INTERVAL ${dias} DAY
+      GROUP BY c.id, c.nombre
+      ORDER BY total DESC, c.nombre`);
+    return rows.map((row) => ({ categoria: row.categoria, total: Number(row.total) }));
   }
 }
 

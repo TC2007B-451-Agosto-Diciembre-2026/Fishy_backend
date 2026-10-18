@@ -50,6 +50,9 @@ export class ReporteResponseDto {
 
   @ApiProperty({ example: false, description: 'Si quien pregunta ya marcó "me pasó igual"' })
   yaDiLike: boolean = false;
+
+  @ApiProperty({ example: 3 })
+  comentariosCount: number = 0;
  
   static fromEntity(reporte: Reporte, opts: { incluirDueno: boolean }): ReporteResponseDto {
     const dto = new ReporteResponseDto();

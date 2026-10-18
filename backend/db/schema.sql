@@ -98,3 +98,19 @@ CREATE TABLE IF NOT EXISTS progreso_lecturas (
     FOREIGN KEY (usuario_id) REFERENCES usuario(id) ON DELETE CASCADE,
     FOREIGN KEY (lectura_id) REFERENCES lecturas(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS comentario (
+    id CHAR(36) PRIMARY KEY,
+    contenido VARCHAR(500) NOT NULL,
+
+    fecha_creado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_update TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    perteneceA CHAR(36) NULL,
+    perteneceAReporte CHAR(36) NOT NULL,
+
+    INDEX idx_comentario_reporte_fecha (perteneceAReporte, fecha_creado),
+
+    FOREIGN KEY (perteneceA) REFERENCES usuario(id) ON DELETE SET NULL,
+    FOREIGN KEY (perteneceAReporte) REFERENCES reporte(id) ON DELETE CASCADE
+);

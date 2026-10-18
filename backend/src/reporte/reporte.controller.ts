@@ -25,6 +25,7 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { ModerarReporteDto } from './dto/admin-reporte.dto';
 import { MisReportesResponseDto } from './dto/mis-reportes-response.dto';
+import {EstadisticaCategoriaDto} from './dto/estadistica-categoria.dto';
 
 @ApiTags('reportes')
 @ApiBearerAuth()
@@ -72,6 +73,11 @@ export class ReporteController{
   listarMios(@CurrentUser() user: JwtPayload): Promise<MisReportesResponseDto> {
     return this.service.listarMios(user.sub);
   }
+  
+  @Get('estadisticas')
+  estadisticas(): Promise<EstadisticaCategoriaDto[]> {
+    return this.service.estadisticas(30);
+  } 
 
   @Get(':id')
   @ApiOperation({ summary: 'Ver un reporte' })
