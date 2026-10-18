@@ -33,7 +33,7 @@ describe('HU07 - Ver mis reportes', () => {
   const reporteCategoriaRepository = {
     findCategorias: jest.fn<(...args: any[]) => Promise<any>>(),
   };
-
+  //HOLAAA
   const likeRepository = {
     contarPorUsuarioEnOtros: jest.fn<(...args: any[]) => Promise<any>>(),
     contar: jest.fn<(...args: any[]) => Promise<any>>(),

@@ -31,9 +31,8 @@ export class LecturaRepository {
     const [rows] = await this.pool.query<RowDataPacket[]>(
       `SELECT ${COLUMNS}, p.completada, p.fecha_completado
        FROM lecturas l
-       LEFT JOIN progreso_lecturas p ON p.lectura_id = l.id AND p.usuario_id = ?
-       WHERE l.id = ?`,
-      [usuarioId, id],
+       LEFT JOIN progreso_lecturas p ON p.lectura_id = l.id AND p.usuario_id = '${usuarioId}'
+       WHERE l.id = '${id}'`,
     );
     return rows[0] && toConProgreso(rows[0]);
   }
