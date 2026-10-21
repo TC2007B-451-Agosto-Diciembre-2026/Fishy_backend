@@ -9,18 +9,32 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+   app.disable('x-powered-by');
   // forbidNonWhitelisted: en lugar de quitar en silencio los campos extra, responde 400 y avisa.
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   // CORS solo para el origen del frontend; con enableCors() sin opciones cualquier página podía llamar a la API.
-  app.enableCors({ origin: process.env.FRONT_URL ?? 'http://localhost:5173' });
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim());
 
   // Headers de seguridad (nosniff, CSP, HSTS...). nosniff es la segunda capa contra subir HTML como "foto".
   // crossOriginResourcePolicy: el frontend (otro puerto) necesita poder mostrar las fotos de /uploads.
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads'});
-
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Permite herramientas sin Origin (Postman, curl, server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origen no permitido por CORS'), false);
+    },
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    maxAge: 600,
+  });
   // Documentación OpenAPI. Se genera a partir de los decoradores de los
   // controllers y DTOs: Swagger UI en /docs, el documento crudo en /docs-json.
   const config = new DocumentBuilder()

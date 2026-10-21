@@ -26,7 +26,7 @@ export class AuthController {
     @Post('login')
     @HttpCode(200)
     @ApiOperation({ summary: 'Entrar: correo + contraseña → tokens' })
-    @ApiResponse({ status: 200, description: 'accessToken vive 15 min; refreshToken, 7 días', schema: { example: { accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' } } })
+    @ApiResponse({ status: 200, description: 'accessToken vive 15 min; refreshToken, 7 días', schema: { example: { accessToken: '<accessToken-de-ejemplo>', refreshToken: '<refreshToken-de-ejemplo>' } } })
     @ApiResponse({ status: 400, description: 'Correo inválido o falta la contraseña' })
     @ApiResponse({ status: 401, description: 'Credenciales inválidas (mismo mensaje si el correo no existe o la contraseña es incorrecta)' })
     @ApiResponse({ status: 429, description: 'Demasiados intentos: máximo 5 por minuto' })
@@ -40,7 +40,7 @@ export class AuthController {
     @Post('refresh')
     @HttpCode(200)
     @ApiOperation({ summary: 'Access token nuevo a partir del refresh token' })
-    @ApiResponse({ status: 200, description: 'Token refrescado exitosamente', schema: { example: { accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' } } })
+    @ApiResponse({ status: 200, description: 'Token refrescado exitosamente', schema: { example: { accessToken: '<accessToken-de-ejemplo>' } } })
     @ApiResponse({ status: 401, description: 'Refresh token inválido o expirado' })
     refresh(@Body() dto: RefreshDto) {
         return this.service.refresh(dto);
